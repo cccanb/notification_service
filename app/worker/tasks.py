@@ -70,4 +70,20 @@ def send_notification(self: Task, payload: dict) -> None:
         _send_to_dead_letter(payload, reason=str(e))
 
 def _send_to_dead_letter(payload: dict, *, reason: str) -> None:
-    ...
+    """
+    Helper to enqueue failed notifications in the dead-letter queue with a reason.
+    """
+    dead_letter_sink.apply_async(args=[payload, reason], queue="notifications.failed")
+
+@celery_app.task(name="app.worker.tasks.dead_letter_sink", queue="notifications.failed")
+def dead_letter_sink(payload: dict, reason: str) -> None:
+    """
+    Receives failed notifications. Log and store for later inspection.
+    """
+    logger.error(
+        "Dead-letter received | channel=%s reason=%s payload=%s",
+        payload.get("channel"),
+        reason,
+        payload,
+    )
+    # TODO: persist to DB or storage
