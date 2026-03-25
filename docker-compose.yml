@@ -2,6 +2,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    container_name: redis
     ports:
       - "${REDIS_PORT}:6379"
     healthcheck:
@@ -12,12 +13,14 @@ services:
 
   mailhog:
     image: mailhog/mailhog:latest
+    container_name: mailhog
     ports:
       - "${MAILHOG_SMTP_PORT}:1025"
       - "${MAILHOG_HTTP_PORT}:8025"
 
   notification-service:
     build: .
+    container_name: notification_service
     ports:
       - "${NOTIFICATION_SERVICE_PORT}:8001"
     command: uvicorn app.main:app --host 0.0.0.0 --port 8001 --reload
@@ -37,6 +40,7 @@ services:
 
   celery-worker:
     build: .
+    container_name: celery
     command: celery -A app.worker.tasks worker --loglevel=info -Q notifications,notifications.failed
     volumes:
       - .:/app
