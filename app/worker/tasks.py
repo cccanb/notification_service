@@ -3,11 +3,13 @@ from celery import Task
 from pydantic import ValidationError
 
 from app.worker.celery_app import celery_app
+from app.channels import EmailChannel
+from app.models import EmailNotification
 
 logger = logging.getLogger(__name__)
 
 CHANNEL_REGISTRY: dict[str, dict[str, object]] = {
-    # "email": {"schema": EmailNotification, "handler": EmailChannel()},
+    "email": {"schema": EmailNotification, "handler": EmailChannel()},
     # "webhook": {"schema": WebhookNotification, "handler": WebhookChannel()},
 }
 
@@ -20,7 +22,7 @@ CHANNEL_REGISTRY: dict[str, dict[str, object]] = {
 )
 def send_notification(self: Task, payload: dict) -> None:
     """
-    Main task
+    Send a notification based on the provided payload.
     """
     channel_name: str = payload.get("channel", "<unknown>")
     attempt: int = self.request.retries + 1
