@@ -33,17 +33,41 @@ def send_notification(self: Task, payload: dict) -> None:
     )
 
     # TODO: move to separate function for better readability
+    entry = CHANNEL_REGISTRY.get(channel_name)
+    if entry is None:
+        logger.error("Channel '%s' not registered — sending to dead-letter queue", channel_name)
+        _send_to_dead_letter(payload, reason=f"channel not registered: {channel_name}")
+        return
+
     try:
-        channel = CHANNEL_REGISTRY[channel_name]
-        event = channel.schema(**payload)
-    except KeyError:
-        logger.error("Unknown channel '%s' — sending to dead-letter queue", channel_name)
-        _send_to_dead_letter(payload, reason=f"unknown channel: {channel_name}")
+        event = entry.validate(payload)
+    except ValidationError as e:
+        logger.error("Payload validation failed: %s", e)
+        _send_to_dead_letter(payload, reason=str(e))
         return
-    except ValidationError as exc:
-        logger.error("Payload validation failed: %s", exc)
-        _send_to_dead_letter(payload, reason=str(exc))
-        return
+    
+    try:
+        entry.send(event.model_dump())
+        logger.info("Notification sent successfully | channel=%s", channel_name)
+    except (IOError, OSError, RuntimeError) as e:
+        logger.warning(
+            "Attempt %d failed | channel=%s error=%s",
+            attempt,
+            channel_name,
+            e,
+        )
+        if self.request.retries < self.max_retries:
+            # TODO: implement exponential backoff with jitter
+            countdown = 10
+            logger.info("Retrying in %d s...", countdown)
+            raise self.retry(exc=e, countdown=countdown)
+
+        logger.error(
+            "All %d attempts failed | channel=%s — moving to dead-letter queue",
+            self.max_retries + 1,
+            channel_name,
+        )
+        _send_to_dead_letter(payload, reason=str(e))
 
 def _send_to_dead_letter(payload: dict, *, reason: str) -> None:
     ...
