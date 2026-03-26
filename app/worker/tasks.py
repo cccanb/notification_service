@@ -3,14 +3,14 @@ from celery import Task
 from pydantic import ValidationError
 
 from app.worker.celery_app import celery_app
-from app.channels import EmailChannel
-from app.models import EmailNotification
+from app.channels import EmailChannel, WebhookChannel
+from app.models import EmailNotification, WebhookNotification
 
 logger = logging.getLogger(__name__)
 
 CHANNEL_REGISTRY: dict[str, dict[str, object]] = {
     "email": {"schema": EmailNotification, "handler": EmailChannel()},
-    # "webhook": {"schema": WebhookNotification, "handler": WebhookChannel()},
+    "webhook": {"schema": WebhookNotification, "handler": WebhookChannel()},
 }
 
 
