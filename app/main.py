@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from app.models.notification import EmailNotification
+from app.models import NotificationEvent
 from app.worker.tasks import send_notification
 
 app = FastAPI()
@@ -10,7 +10,7 @@ async def healthz():
     return {"status": "ok"}
 
 @app.post("/notify", status_code=202)
-def notify(event: EmailNotification):
+def notify(event: NotificationEvent):
     task = send_notification.apply_async(
         args=[event.model_dump()], queue="notifications"
     )
