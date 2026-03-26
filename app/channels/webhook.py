@@ -6,7 +6,7 @@ from app.models import WebhookNotification
 logger = logging.getLogger(__name__)
 
 
-class WebhookSyncChannel(BaseChannel):
+class WebhookChannel(BaseChannel):
     schema = WebhookNotification
 
     def send(self, event: dict[str, Any]) -> None:
