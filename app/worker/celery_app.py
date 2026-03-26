@@ -18,6 +18,9 @@ celery_app.conf.update(
         "notifications": {},
         "notifications.failed": {},
     },
+    task_routes={
+        "app.worker.tasks.send_notification": {"queue": "notifications"},
+    },
 
     # ack only after the task completes
     # TODO: implement idempotency
