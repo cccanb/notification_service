@@ -1,17 +1,12 @@
 import logging
 from celery import Task
 from pydantic import ValidationError
-
 from app.worker.celery_app import celery_app
-from app.channels import EmailChannel, WebhookChannel
-from app.models import EmailNotification, WebhookNotification
+from app.worker.helpers import dispatch_notification, resolve_channel, send_to_dead_letter, validate_payload
 
 logger = logging.getLogger(__name__)
 
-CHANNEL_REGISTRY: dict[str, dict[str, object]] = {
-    "email": {"schema": EmailNotification, "handler": EmailChannel()},
-    "webhook": {"schema": WebhookNotification, "handler": WebhookChannel()},
-}
+_RETRY_DELAY = 10  # seconds
 
 
 @celery_app.task(
@@ -21,9 +16,6 @@ CHANNEL_REGISTRY: dict[str, dict[str, object]] = {
     queue="notifications",
 )
 def send_notification(self: Task, payload: dict) -> None:
-    """
-    Send a notification based on the provided payload.
-    """
     channel_name: str = payload.get("channel", "<unknown>")
     attempt: int = self.request.retries + 1
 
@@ -34,54 +26,39 @@ def send_notification(self: Task, payload: dict) -> None:
         self.max_retries + 1,
     )
 
-    # TODO: move to separate function for better readability
-    entry = CHANNEL_REGISTRY.get(channel_name)
-    if entry is None:
+    handler = resolve_channel(channel_name)
+    if handler is None:
         logger.error("Channel '%s' not registered — sending to dead-letter queue", channel_name)
-        _send_to_dead_letter(payload, reason=f"channel not registered: {channel_name}")
+        send_to_dead_letter(payload, reason=f"channel not registered: {channel_name}")
         return
 
     try:
-        event = entry.validate(payload)
+        event = validate_payload(handler, payload)
     except ValidationError as e:
         logger.error("Payload validation failed: %s", e)
-        _send_to_dead_letter(payload, reason=str(e))
+        send_to_dead_letter(payload, reason=str(e))
         return
-    
+
     try:
-        entry.send(event.model_dump())
+        dispatch_notification(handler, event)
         logger.info("Notification sent successfully | channel=%s", channel_name)
     except (IOError, OSError, RuntimeError) as e:
-        logger.warning(
-            "Attempt %d failed | channel=%s error=%s",
-            attempt,
-            channel_name,
-            e,
-        )
+        logger.warning("Attempt %d failed | channel=%s error=%s", attempt, channel_name, e)
         if self.request.retries < self.max_retries:
             # TODO: implement exponential backoff with jitter
-            countdown = 10
-            logger.info("Retrying in %d s...", countdown)
-            raise self.retry(exc=e, countdown=countdown)
+            logger.info("Retrying in %d s...", _RETRY_DELAY)
+            raise self.retry(exc=e, countdown=_RETRY_DELAY)
 
         logger.error(
             "All %d attempts failed | channel=%s — moving to dead-letter queue",
             self.max_retries + 1,
             channel_name,
         )
-        _send_to_dead_letter(payload, reason=str(e))
+        send_to_dead_letter(payload, reason=str(e))
 
-def _send_to_dead_letter(payload: dict, *, reason: str) -> None:
-    """
-    Helper to enqueue failed notifications in the dead-letter queue with a reason.
-    """
-    dead_letter_sink.apply_async(args=[payload, reason], queue="notifications.failed")
 
 @celery_app.task(name="app.worker.tasks.dead_letter_sink", queue="notifications.failed")
 def dead_letter_sink(payload: dict, reason: str) -> None:
-    """
-    Receives failed notifications. Log and store for later inspection.
-    """
     logger.error(
         "Dead-letter received | channel=%s reason=%s payload=%s",
         payload.get("channel"),
