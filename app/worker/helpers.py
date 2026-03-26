@@ -36,7 +36,7 @@ def compute_retry_delay(
     Exponential backoff with full jitter.
     """
     exponential = min(cap, base * (2 ** attempt))
-    return random.uniform(0, exponential) + random.uniform(-jitter, jitter)
+    return max(0.0, random.uniform(0, exponential) + random.uniform(-jitter, jitter))
 
 
 def send_to_dead_letter(payload: dict, *, reason: str) -> None:
