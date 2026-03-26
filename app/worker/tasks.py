@@ -2,11 +2,15 @@ import logging
 from celery import Task
 from pydantic import ValidationError
 from app.worker.celery_app import celery_app
-from app.worker.helpers import dispatch_notification, resolve_channel, send_to_dead_letter, validate_payload
+from app.worker.helpers import (
+    compute_retry_delay,
+    dispatch_notification,
+    resolve_channel,
+    send_to_dead_letter,
+    validate_payload,
+)
 
 logger = logging.getLogger(__name__)
-
-_RETRY_DELAY = 10  # seconds
 
 
 @celery_app.task(
@@ -45,9 +49,9 @@ def send_notification(self: Task, payload: dict) -> None:
     except (IOError, OSError, RuntimeError) as e:
         logger.warning("Attempt %d failed | channel=%s error=%s", attempt, channel_name, e)
         if self.request.retries < self.max_retries:
-            # TODO: implement exponential backoff with jitter
-            logger.info("Retrying in %d s...", _RETRY_DELAY)
-            raise self.retry(exc=e, countdown=_RETRY_DELAY)
+            delay = compute_retry_delay(self.request.retries)
+            logger.info("Retrying in %.1f s...", delay)
+            raise self.retry(exc=e, countdown=delay)
 
         logger.error(
             "All %d attempts failed | channel=%s — moving to dead-letter queue",

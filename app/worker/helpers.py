@@ -1,4 +1,5 @@
 import logging
+import random
 from pydantic import BaseModel
 from app.channels import EmailChannel, WebhookChannel
 from app.channels.base import BaseChannel
@@ -22,6 +23,20 @@ def validate_payload(handler: BaseChannel, payload: dict) -> BaseModel:
 
 def dispatch_notification(handler: BaseChannel, event: BaseModel) -> None:
     handler.send(event.model_dump())
+
+
+def compute_retry_delay(
+    attempt: int,
+    *,
+    base: float = 2.0,
+    cap: float = 60.0,
+    jitter: float = 1.0,
+) -> float:
+    """
+    Exponential backoff with full jitter.
+    """
+    exponential = min(cap, base * (2 ** attempt))
+    return random.uniform(0, exponential) + random.uniform(-jitter, jitter)
 
 
 def send_to_dead_letter(payload: dict, *, reason: str) -> None:
