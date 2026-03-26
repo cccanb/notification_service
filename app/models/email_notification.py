@@ -1,5 +1,5 @@
 from typing import Any, Literal
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class EmailNotification(BaseModel):
@@ -7,5 +7,5 @@ class EmailNotification(BaseModel):
     recipient: str
     subject: str
     body: str
-    metadata: dict[str, Any] = {}
+    metadata: dict[str, Any] = Field(default_factory=dict)
 

@@ -2,7 +2,7 @@ import logging
 import os
 from typing import Any
 from app.channels.base import BaseChannel
-from app.models.notification import EmailNotification
+from app.models import EmailNotification
 
 logger = logging.getLogger(__name__)
 
