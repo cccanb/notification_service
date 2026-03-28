@@ -22,7 +22,7 @@ def validate_payload(handler: BaseChannel, payload: dict) -> BaseModel:
 
 
 def dispatch_notification(handler: BaseChannel, event: BaseModel) -> None:
-    handler.send(event.model_dump())
+    handler.send(event)
 
 
 def compute_retry_delay(
