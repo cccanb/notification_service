@@ -1,2 +1,5 @@
 services:
 # TODO: implement production setup
+# resource limits
+# docker secrets
+# health checks
