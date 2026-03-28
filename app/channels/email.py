@@ -12,12 +12,28 @@ class EmailChannel(BaseChannel):
     schema = EmailNotification
 
     def __init__(self) -> None:
-        self.host = os.getenv("SMTP_HOST", "localhost")
-        self.port = int(os.getenv("MAILHOG_SMTP_PORT", "1025"))
-        self.username = os.getenv("SMTP_USERNAME", "")
-        self.password = os.getenv("SMTP_PASSWORD", "")
-        self.sender = os.getenv("SMTP_SENDER", "notifications@example.com")
+        self.host = os.getenv("SMTP_HOST")
+        self.port = int(os.getenv("SMTP_PORT"))
+        self.username = os.getenv("SMTP_USERNAME")
+        self.password = os.getenv("SMTP_PASSWORD")
+        self.sender = os.getenv("SMTP_SENDER")
         self.use_tls = os.getenv("SMTP_USE_TLS", "false").lower() == "true"
+        self._validate_config()
+
+    def _validate_config(self) -> None:
+        errors: list[str] = []
+
+        if not self.host:
+            errors.append("SMTP_HOST is required")
+        if not (1 <= self.port <= 65535):
+            errors.append(f"SMTP port must be between 1 and 65535, got {self.port}")
+        if not self.sender:
+            errors.append("SMTP_SENDER is required")
+        if bool(self.username) != bool(self.password):
+            errors.append("SMTP_USERNAME and SMTP_PASSWORD must both be set or both be empty")
+
+        if errors:
+            raise ValueError("EmailChannel misconfigured: " + "; ".join(errors))
 
     def send(self, event: EmailNotification) -> None:
         recipient = event.recipient
