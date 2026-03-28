@@ -83,7 +83,7 @@ Create a `.env` file before running (not committed to the repo):
 
 ```env
 REDIS_PORT=6379
-MAILHOG_SMTP_PORT=1025
+SMTP_PORT=1025
 MAILHOG_HTTP_PORT=8025
 NOTIFICATION_SERVICE_PORT=8001
 
